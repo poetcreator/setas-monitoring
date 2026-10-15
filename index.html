@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setas v3 — Control Room status</title>
+<style>
+  body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, sans-serif; color: #1a1a1a; background: #fff; }
+  .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; max-width: 720px; }
+  .head strong { font-size: 1.1em; }
+  #age { font-size: 0.85em; color: #888; }
+  #tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; max-width: 720px; }
+  .tile { padding: 12px 14px; border: 1px solid #e3e3e3; border-radius: 10px; background: #fafafa; }
+  .tile .label { font-size: 0.78em; color: #666; margin-bottom: 4px; }
+  .tile .value { font-size: 1.5em; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <strong>Setas v3 — Control Room status</strong>
+    <span id="age">loading…</span>
+  </div>
+  <div id="tiles"></div>
+
+<script>
+  const RAW_URL = "https://gist.githubusercontent.com/poetcreator/6292013dcb05c4b806e812a05a786c02/raw/setasmonitoring.json";
+  const TILES = [
+    { key: "poet_online",         label: "Poet server",           type: "bool", on: "Online",  off: "Offline" },
+    { key: "poet_scheduler_ok",   label: "Poet scheduler",        type: "bool", on: "Running", off: "Stopped" },
+    { key: "poet_rack_temp",      label: "Poet rack",             unit: "°C" },
+    { key: "poet_rack_hum",       label: "Poet rack humidity",    unit: "%" },
+    { key: "outputs_rack_temp",   label: "Outputs rack",          unit: "°C" },
+    { key: "outputs_rack_hum",    label: "Outputs rack humidity", unit: "%" },
+    { key: "csp5_pdb_g1_5_temp",  label: "CSP5 PDBs G1–5",        unit: "°C" },
+    { key: "csp5_pdb_g6_10_temp", label: "CSP5 PDBs G6–10",       unit: "°C" },
+    { key: "csp6_pdb_g1_5_temp",  label: "CSP6 PDBs G1–5",        unit: "°C" },
+    { key: "csp6_pdb_g6_10_temp", label: "CSP6 PDBs G6–10",       unit: "°C" }
+  ];
+  const STALE_MIN = 3;      // mark data as stale if older than this (minutes)
+  const REFRESH_MS = 60000; // re-read the gist every 60 s
+
+  function tile(t, v) {
+    let text, color = "#1a1a1a";
+    if (v === null || v === undefined) { text = "—"; color = "#999"; }
+    else if (t.type === "bool") { text = v ? t.on : t.off; color = v ? "#2e7d32" : "#c62828"; }
+    else { text = v + (t.unit ? " " + t.unit : ""); }
+    return `<div class="tile"><div class="label">${t.label}</div><div class="value" style="color:${color}">${text}</div></div>`;
+  }
+
+  async function refresh() {
+    const age = document.getElementById("age");
+    try {
+      const r = await fetch(RAW_URL + "?t=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const d = await r.json();
+      const when = new Date(d.updated);
+      const ageMin = (Date.now() - when.getTime()) / 60000;
+      const stale = ageMin > STALE_MIN;
+      age.textContent = "Updated " + when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + (stale ? " — STALE" : "");
+      age.style.color = stale ? "#c62828" : "#888";
+      document.getElementById("tiles").innerHTML = TILES.map(t => tile(t, d[t.key])).join("");
+    } catch (e) {
+      age.textContent = "Cannot reach data (" + e.message + ")";
+      age.style.color = "#c62828";
+    }
+  }
+
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
